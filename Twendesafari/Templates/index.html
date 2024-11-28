@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Django HTMX & Leaflet</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" 
+    integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+
+  <script src="https://unpkg.com/htmx.org@1.9.0" integrity="sha384-aOxz9UdWG0yBiyrTwPeMibmaoq07/d3a96GCbb9x60f3mOt5zwkjdbcHFnKH8qls" crossorigin="anonymous"></script>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+      integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin=""/>
+
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+      integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin=""></script>
+      
+  <style>
+      #map {
+        height: 800px; 
+      }
+  </style>
+
+</head>
+<body> 
+  
+    <nav class="navbar navbar-expand-lg bg-body-tertiary" style="background-color: #e3f2fd;">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">Navbar</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item">
+              <a class="nav-link active" aria-current="page" href="#">Home</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#">Link</a>
+            </li>
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                Dropdown
+              </a>
+              <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="#">Action</a></li>
+                <li><a class="dropdown-item" href="#">Another action</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="#">Something else here</a></li>
+              </ul>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link disabled" aria-disabled="true">Disabled</a>
+            </li>
+          </ul>
+          <form class="d-flex" role="search">
+            <input class="form-control me-2" type="search" placeholder="Search" aria-label="Search">
+            <button class="btn btn-outline-success" type="submit">Search</button>
+          </form>
+        </div>
+      </div>
+    </nav>
+
+  <div id="map"></div>
+  {{ parks|json_script:"parks_json" }}
+
+
+  <script>
+    // Initialize the map centered at a specific location
+    var map = L.map('map').setView([0.023, 37.90], 19);
+
+    // Add OpenStreetMap tiles to the map
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // Add a marker at the map center (for reference)
+    L.marker([0.023, 37.90]).addTo(map)
+      .bindPopup('A pretty CSS popup.<br> Easily customizable.')
+      .openPopup();
+
+    // Get the parks data from the template context
+    let parks = JSON.parse(document.getElementById('parks_json').textContent);
+
+    // Loop through parks data and add markers
+    parks.forEach(park => {
+      L.marker([park.latitude, park.longitude])
+        .bindPopup(park.name) // Add popup with park name
+        .addTo(map);
+    });
+
+    // Handle map clicks (optional)
+    map.on('click', function(e) {
+      var lat = e.latlng.lat;
+      var lng = e.latlng.lng;
+
+      // Add a marker on click
+      L.marker([lat, lng]).addTo(map)
+        .bindPopup(`You clicked the map at ${lat.toFixed(2)}, ${lng.toFixed(2)}`)
+        .openPopup();
+
+      // Fetch data (replace with your actual URL pattern)
+      fetch(`/get-nearest-park?latitude=${lat}&longitude=${lng}`)
+        .then(response => response.json())
+        .then(results => {
+          // Assuming `results` contains coordinates and other necessary info
+          var park_coordinates = results.park_coordinates; // Ensure this is correct
+          var user_coordinates = [lat, lng];
+
+          // Draw a polyline between user click and nearest park
+          let polyline = L.polyline([user_coordinates, park_coordinates]).addTo(map);
+
+          // Create and show popup with distance to nearest park
+          var popup = L.popup()
+            .setLatLng([lat, lng])
+            .setContent(`<p>Nearest park ${results.distance} km away.</p>`)
+            .openOn(map);
+
+          // Add marker for nearest park if available
+          if (results.nearest_park) {
+            L.marker([results.nearest_park.latitude, results.nearest_park.longitude])
+              .addTo(map)
+              .bindPopup(`Nearest park: ${results.nearest_park.name}`)
+              .openPopup();
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching data:', error);
+        });
+    });
+  </script>
+ 
+</body>
+</html>
